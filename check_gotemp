@@ -11,31 +11,57 @@
 
 use strict;
 
-my $PROGNAME="check_gotemp";
+use Getopt::Long;
+use vars qw($opt_w $opt_c);
 
+my $PROGNAME="check_gotemp";
 my ($buf,$n46, $number_read, $tmp1, $tmp2, $tmp3, $cnt,$tmp_low, $tmp_high);
 my ($temp, $real);
 
-    open(DEV, "/dev/usb/hiddev0") || die "couldn't open device file";
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
+Getopt::Long::Configure('bundling');
+GetOptions
+        (
+         "w=s" => \$opt_w, "warning=s"  => \$opt_w,
+         "c=s" => \$opt_c, "critical=s" => \$opt_c);
 
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $cnt, $tmp2, $tmp3) = unpack("s s C C s", $buf);
+($opt_w) || ($opt_w = shift @ARGV) || ($opt_w = 35);
+my $warn = $opt_w;
 
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $tmp_low, $tmp2, $tmp3) = unpack("s s C C s", $buf);
+($opt_c) || ($opt_c = shift @ARGV) || ($opt_c = 45);
+my $crit = $opt_c;
 
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $tmp_high, $tmp2, $tmp3) = unpack("s s C C s", $buf);
+if(!open(DEV, "/dev/usb/hiddev0")) {
+    printf("UNKNOWN: cannot open /dev/usb/hiddev0 | temp=0;0;0;10;50\n");
+    exit 3;
+}
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
 
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
-    $number_read = read(DEV, $buf, 8);
-    ($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $cnt, $tmp2, $tmp3) = unpack("s s C C s", $buf);
 
-    $temp = $tmp_high*255+$tmp_low;
-    $real = $temp/110.0;  # simple calculation 100°~ 11200  0°~200
-    printf("%d\n",$real);
-    close DEV;
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $tmp_low, $tmp2, $tmp3) = unpack("s s C C s", $buf);
 
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $tmp_high, $tmp2, $tmp3) = unpack("s s C C s", $buf);
+
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
+$number_read = read(DEV, $buf, 8);
+($n46, $tmp1, $tmp2, $tmp3) = unpack("s s s s", $buf);
+close DEV;
+
+$temp = $tmp_high*255+$tmp_low;
+$real = $temp/110.0;  # simple calculation 100°~ 11200  0°~200
+
+if($real>=$crit) {
+    printf("CRITICAL: Temperatur zu hoch | temp=%d;%d;%d;10;50\n", $real, $warn, $crit);
+    exit 2;
+}
+if($real>=$warn) {
+    printf("WARNING: Temperatur hoch | temp=%d;%d;%d;10;50\n", $real, $warn, $crit);
+    exit 1;
+}
+printf("OK: Temperatur ok | temp=%d;%d;%d;10;50\n", $real, $warn, $crit);
+exit 0;
